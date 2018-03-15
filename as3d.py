@@ -17,7 +17,7 @@ import copy
 
 
 # read CSV files in folder "coordinates" and store data into DataFrame
-def readCSV(l_csv):
+def readCSV(path,l_csv):
     df_coord=pd.DataFrame(columns=["Nome Punto","Data Misura","N","E","H"])
     for csv_file in l_csv:
         csv_file=csv_file.strip()
@@ -167,7 +167,7 @@ def pointsLayers(l_nomi_pti):
     
 
 # creation of displacement vector   
-def arrowPointsCreation(x0,y0,z0,x1,y1,z1, layer_name):
+def arrowPointsCreation(x0,y0,z0,x1,y1,z1, layer_name,drawing):
     # vector magnitude calculation
     mod=math.sqrt((x1-x0)**2+(y1-y0)**2+(z1-z0)**2)
     # Calculation of a,d,c coefficient of the plane equation (base of arrow).
@@ -264,7 +264,7 @@ def arrowPointsCreation(x0,y0,z0,x1,y1,z1, layer_name):
     drawing.add(lineI)
 
 # creation of labels  
-def datesLabelsCreation(layer_name,i):
+def datesLabelsCreation(layer_name,i,text_h,drawing):
     # insert point of dates labels
     x0=10
     y0=-20
@@ -277,7 +277,7 @@ def datesLabelsCreation(layer_name,i):
     drawing.add(text)
   
 # creation of scale bar  
-def scaleBarCreation(fs):
+def scaleBarCreation(fs,text_h,drawing):
     # lenght of 1 cm scalebar
     fs1=fs/100
     drawing.add_layer('scale_bar', color=7)
@@ -311,7 +311,7 @@ def scaleBarCreation(fs):
     drawing.add(text)
 
 # creation of points names labels
-def pointsLabels(df_coord_zero):
+def pointsLabels(drawing,text_h,df_coord_zero):
     
     for nome_pto in df_coord_zero.index:
         x=df_coord_zero['E'].loc[nome_pto]
@@ -324,7 +324,7 @@ def pointsLabels(df_coord_zero):
         drawing.add(text)
     
 # creation of displacements arrows
-def drawDisp(l_dates,df_coord_zero,df_coord_rel):
+def drawDisp(drawing,l_dates,df_coord_zero,df_coord_rel,text_h):
     
     j=1 # layer color index
     
@@ -332,7 +332,7 @@ def drawDisp(l_dates,df_coord_zero,df_coord_rel):
         layer_name=l_dates[i].strftime('%d%m%Y')
         drawing.add_layer(layer_name, color=j)
         
-        datesLabelsCreation(layer_name,i)
+        datesLabelsCreation(layer_name,i,text_h,drawing)
 
         l_nomi_pti_misu=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i]].index.tolist()
         
@@ -346,21 +346,21 @@ def drawDisp(l_dates,df_coord_zero,df_coord_rel):
             y1=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i]].loc[nome_pto]['N']
             z1=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i]].loc[nome_pto]['H']
             
-            arrowPointsCreation(x0,y0,z0,x1,y1,z1,layer_name)
+            arrowPointsCreation(x0,y0,z0,x1,y1,z1,layer_name,drawing)
 
         j=j+1
     drawing.save()
     
 # creation of time-delta graphs
-def graphTD(df_delta, l_nomi_pti):
+def graphTD(df_delta, l_nomi_pti_graph):
     # inizializzazione variabili
     traces=[]
-    l_visible=[False for i in range(0,3*len(l_nomi_pti))]
+    l_visible=[False for i in range(0,3*len(l_nomi_pti_graph))]
     l_buttons=[]
     i=0
     # per ogni punto misurato vengono presi i dati da graficare dalla variabile
     # di tipo DataFrame 'df_delta'
-    for nome_pto in l_nomi_pti:
+    for nome_pto in l_nomi_pti_graph:
         # definizione 'traces' da rappresentare in asse x e y
         traces.append(plotly.graph_objs.Scatter(
                 x = df_delta.loc[nome_pto]['Data Misura'],
@@ -501,117 +501,55 @@ def graphSection(df_delta, d_cum, l_vert, filename_i):
 
 #------------------------------------------------------------------------------
 
-path="./coordinate"
+def main():
+    path="./coordinate"
 
-# height of text labels
-text_h=0.2
-# scale factor for dxf rappresentation
-fs = 100
-l_csv=os.listdir(path)
-df_coord=readCSV(l_csv)
-l_nomi_pti=nomiPti(df_coord)
-l_dates=dates(df_coord)
-s_dates_zero=datesZero(df_coord,l_nomi_pti)
-df_coord_zero=zeroCoord(df_coord,l_nomi_pti,s_dates_zero)
-[df_delta,df_coord_mean]=deltaCoord(df_coord,df_coord_zero,l_dates)
-df_delta_rel=deltaCoordRel(l_dates,df_coord_mean)
-df_coord_rel=relCoord(fs,l_dates,df_coord_mean,df_delta_rel)
+    # height of text labels
+    text_h=0.2
+    # scale factor for dxf rappresentation
+    fs = 100
+    l_csv=os.listdir(path)
+    df_coord=readCSV(path,l_csv)
+    l_nomi_pti=nomiPti(df_coord)
+    l_dates=dates(df_coord)
+    s_dates_zero=datesZero(df_coord,l_nomi_pti)
+    df_coord_zero=zeroCoord(df_coord,l_nomi_pti,s_dates_zero)
+    [df_delta,df_coord_mean]=deltaCoord(df_coord,df_coord_zero,l_dates)
+    df_delta_rel=deltaCoordRel(l_dates,df_coord_mean)
+    df_coord_rel=relCoord(fs,l_dates,df_coord_mean,df_delta_rel)
 
-# creation of dxf file of all dispacements
-drawing= dxf.drawing('paratia.dxf')
-pointsLabels(df_coord_zero)
-scaleBarCreation(fs)
-drawDisp(l_dates,df_coord_zero,df_coord_rel)
+    # creation of dxf file of all dispacements
+    drawing= dxf.drawing('paratia.dxf')
+    pointsLabels(drawing,text_h,df_coord_zero)
+    scaleBarCreation(fs,text_h,drawing)
+    drawDisp(drawing,l_dates,df_coord_zero,df_coord_rel,text_h)
 
-# creation of plotly time-displacements graphs
-graphTD(df_delta, l_nomi_pti)
-
-# creation of plotly normal-displacements graphs
-# definizioni dei punti da rappresentare per ogni verticale
-l_vert_1=['07','04','01']
-filename_1='graph_vert_1.html'
-l_vert_2=['08','05','02']
-filename_2='graph_vert_2.html'
-l_vert_3=['09','06','03']
-filename_3='graph_vert_3.html'
-# calcolo mutue distanze fra punti
-d_cum_1=dist_alt(df_coord_zero, l_vert_1)
-d_cum_2=dist_alt(df_coord_zero, l_vert_2)
-d_cum_3=dist_alt(df_coord_zero, l_vert_3)
-# plotly normal-displacements graphs
-graphSection(df_delta, d_cum_1, l_vert_1, filename_1)
-graphSection(df_delta, d_cum_2, l_vert_2, filename_2)
-graphSection(df_delta, d_cum_3, l_vert_3, filename_3)
-
-# write DataFrames to csv
-df_coord.to_csv('coordinate.csv',sep='\t',decimal=',',float_format='%.3f')
-df_delta.to_csv('spostamenti.csv',sep='\t',decimal=',',float_format='%.3f')
-
-
-'''
-# creation of time-delta graphs
-def graphTDImage(df_delta, l_nomi_pti):
-    # inizializzazione variabili
-    traces=[]
-    l_buttons=[]
-    i=0
+    # creation of plotly time-displacements graphs
+    l_nomi_pti_graph=['01','02','03','04','05','06','07','08','09','10','11','12']
+    graphTD(df_delta, l_nomi_pti_graph)
     
-    # definizione delle caratteristiche dell'asse y
-    yaxis_par=dict(title='spostamenti [m]',
-                   titlefont=dict(family='Arial', size=20, color='black'),
-                   showticklabels=True,
-                   tickangle=0,
-                   tickfont=dict(family='Arial',size=20,color='black'),
-                   range=[-0.04, 0.04])
-    # impostazione del layout del grafico
-    layout=go.Layout(title='Grafico spostamenti',
-            font=dict(family='Arial', size=20, color='black'),
-            yaxis=yaxis_par,
-            updatemenus=[{'x':-0.05,'y':1,'yanchor':'top','buttons':l_buttons}]
-            )
-    
-    # per ogni punto misurato vengono presi i dati da graficare dalla variabile
-    # di tipo DataFrame 'df_delta'
-    for nome_pto in l_nomi_pti:
-        traces=[]
-        # definizione 'traces' da rappresentare in asse x e y
-        traces.append(plotly.graph_objs.Scatter(
-                x = df_delta.loc[nome_pto]['Data Misura'],
-                y = df_delta.loc[nome_pto]['E'],
-                mode = 'lines',
-                # nome della serie di dati
-                name = nome_pto + 'E'
-                    )
-                )            
-        traces.append(plotly.graph_objs.Scatter(
-                x = df_delta.loc[nome_pto]['Data Misura'],
-                y = df_delta.loc[nome_pto]['N'],
-                mode = 'lines',
-                # nome della serie di dati
-                name = nome_pto + 'N'
-                    )
-                )
-        traces.append(plotly.graph_objs.Scatter(
-                x = df_delta.loc[nome_pto]['Data Misura'],
-                y = df_delta.loc[nome_pto]['H'],
-                mode = 'lines',
-                # nome della serie di dati
-                name = nome_pto + 'H'
-                    )
-                )
-                   
-        l_buttons.append({
-          "args": ["visible", l_visible_i], 
-          "label": nome_pto, 
-          "method": "restyle"
-          })
-        
-        data = go.Data(traces)
-        
-        fig = go.Figure(data=data, layout=layout)
-        plotly.offline.plot(fig,image='png',image_width=1600, image_height=1200)
-        
-        i=i+3
-        
-'''
+    # creation of plotly normal-displacements graphs
+    # definizioni dei punti da rappresentare per ogni verticale
+    l_vert_1=['07','04','01']
+    filename_1='graph_vert_1.html'
+    l_vert_2=['08','05','02']
+    filename_2='graph_vert_2.html'
+    l_vert_3=['09','06','03']
+    filename_3='graph_vert_3.html'
+    # calcolo mutue distanze fra punti
+    d_cum_1=dist_alt(df_coord_zero, l_vert_1)
+    d_cum_2=dist_alt(df_coord_zero, l_vert_2)
+    d_cum_3=dist_alt(df_coord_zero, l_vert_3)
+    # plotly normal-displacements graphs
+    graphSection(df_delta, d_cum_1, l_vert_1, filename_1)
+    graphSection(df_delta, d_cum_2, l_vert_2, filename_2)
+    graphSection(df_delta, d_cum_3, l_vert_3, filename_3)
+
+    # write DataFrames to csv
+    df_coord.to_csv('coordinate.csv',sep='\t',decimal=',',float_format='%.3f')
+    df_delta.to_csv('spostamenti.csv',sep='\t',decimal=',',float_format='%.3f')
+
+# call the main function
+if __name__ == "__main__":
+    main()
             
