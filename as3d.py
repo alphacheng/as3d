@@ -1,9 +1,9 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-Created on Thu Nov 30 08:59:09 2017
+Created on Sat Mar 31 20:04:00 2018
 
-@author: giacomo
+@author: giacomo tancetti
 """
 import pandas as pd
 import os
@@ -17,7 +17,7 @@ import copy
 
 
 # read CSV files in folder "coordinates" and store data into DataFrame
-def readCSV(path,l_csv):
+def ReadCSV(path,l_csv):
     df_coord=pd.DataFrame(columns=["Nome Punto","Data Misura","N","E","H"])
     for csv_file in l_csv:
         csv_file=csv_file.strip()
@@ -44,28 +44,31 @@ def readCSV(path,l_csv):
     
 
 # define list of all points names measured
-def nomiPti(df_coord):
+def NomiPti(df_coord):
     l_nomi_pti=df_coord.index.unique().tolist()
     l_nomi_pti.sort()
     return(l_nomi_pti)
 
 # define list of all measure dates
-def dates(df_coord):
+def Dates(df_coord):
     l_dates=df_coord["Data Misura"].unique().tolist()
     l_dates.sort()
     return(l_dates)
 
 # define Series of zero-measure dates of all points
-def datesZero(df_coord,l_nomi_pti):
+def DatesZero(df_coord,l_nomi_pti):
     l_dates_zero=[]
     for nome_pto in l_nomi_pti:
         date_misu_i=df_coord.loc[nome_pto]["Data Misura"]
-        l_dates_zero.append((sorted(date_misu_i.tolist()))[0])
+        if isinstance(date_misu_i, pd.Series):
+            l_dates_zero.append((sorted(date_misu_i.tolist()))[0])
+        else:
+            l_dates_zero.append(date_misu_i)
     s_dates_zero=pd.Series(l_dates_zero,index=l_nomi_pti)
     return(s_dates_zero)
 
 # calculate zero-coordinates DataFrame
-def zeroCoord(df_coord,l_nomi_pti,s_dates_zero):
+def ZeroCoord(df_coord,l_nomi_pti,s_dates_zero):
     l_E=[]
     l_N=[]
     l_H=[]
@@ -85,7 +88,7 @@ def zeroCoord(df_coord,l_nomi_pti,s_dates_zero):
     return(df_coord_zero)    
     
 # calculate delta DataFrame
-def deltaCoord(df_coord,df_coord_zero,l_dates):
+def DeltaCoord(df_coord,df_coord_zero,l_dates):
     df_coord_mean=pd.DataFrame(columns=["Data Misura","N","E","H"])
     df_delta=pd.DataFrame(columns=["Data Misura","N","E","H"])
     for date in l_dates:
@@ -95,6 +98,7 @@ def deltaCoord(df_coord,df_coord_zero,l_dates):
         l_nomi_pti_misu=[]
         # find for each date the list of measured points names
         l_nomi_pti_misu=df_coord[df_coord["Data Misura"]==date].index.unique().tolist()
+
         for nome_pto in l_nomi_pti_misu:
             coord_i=df_coord[df_coord["Data Misura"]==date].loc[nome_pto]
             E=coord_i['E'].mean()
@@ -111,7 +115,8 @@ def deltaCoord(df_coord,df_coord_zero,l_dates):
         df_coord_mean=df_coord_mean.append(df_coord_mean_i,ignore_index=False)
 
     for date in l_dates:
-        df_delta_i=df_coord_mean[df_coord_mean['Data Misura']==date][['E','N','H']]-df_coord_zero[['E','N','H']]
+        l_nomi_pti_misu=df_coord[df_coord["Data Misura"]==date].index.unique().tolist()
+        df_delta_i=df_coord_mean[df_coord_mean['Data Misura']==date][['E','N','H']].loc[l_nomi_pti_misu]-df_coord_zero[['E','N','H']].loc[l_nomi_pti_misu]
         # add date column to df DataFrame
         lenght=len(df_delta_i["E"])
         l_dates_i=[date for i in range(0,lenght)]
@@ -123,18 +128,24 @@ def deltaCoord(df_coord,df_coord_zero,l_dates):
     return(df_delta,df_coord_mean)
 
 # calculate relative delta DataFrame
-def deltaCoordRel(l_dates,df_coord_mean):
+def DeltaCoordRel(l_dates,df_coord_mean):
     df_delta_rel=pd.DataFrame(columns=["Data Misura","N","E","H"])
     for i in range(1,len(l_dates)):
         l_deltaE=[]
         l_deltaN=[]
         l_deltaH=[]
         l_nomi_pti_misu=[]
-        # find for each date the list of measured points names
+        # find for each date the list of measured points names at time t-1
+        l_nomi_pti_misu_p=df_coord_mean[df_coord_mean["Data Misura"]==l_dates[i-1]].index.tolist()
+        # find for each date the list of measured points names at time t
         l_nomi_pti_misu=df_coord_mean[df_coord_mean["Data Misura"]==l_dates[i]].index.tolist()
-        for nome_pto in l_nomi_pti_misu:
-            s_delta_rel_i=df_coord_mean[df_coord_mean["Data Misura"]==l_dates[i]][['E','N','H']].loc[nome_pto]-df_coord_mean[df_coord_mean["Data Misura"]==l_dates[i-1]][['E','N','H']].loc[nome_pto]
+        # find for each date the list of common points names in "l_nomi_pti_misu_p"
+        # and "l_nomi_pti_misu"
+        l_nomi_pti_misu_c=sorted(list(set(l_nomi_pti_misu).intersection(l_nomi_pti_misu_p)))
         
+        for nome_pto in l_nomi_pti_misu_c:
+            s_delta_rel_i=df_coord_mean[df_coord_mean["Data Misura"]==l_dates[i]][['E','N','H']].loc[nome_pto]-df_coord_mean[df_coord_mean["Data Misura"]==l_dates[i-1]][['E','N','H']].loc[nome_pto]
+                 
             deltaE=s_delta_rel_i['E']
             deltaN=s_delta_rel_i['N']
             deltaH=s_delta_rel_i['H']
@@ -142,24 +153,27 @@ def deltaCoordRel(l_dates,df_coord_mean):
             l_deltaN.append(deltaN)
             l_deltaH.append(deltaH)
                     
-        lenght=len(l_nomi_pti_misu)
-        d_delta_rel={'Nome Punto':l_nomi_pti_misu,'Data Misura':[l_dates[i] for j in range(0,lenght)],'E':l_deltaE,'N':l_deltaN,'H':l_deltaH}
-        df_delta_rel_i=pd.DataFrame(d_delta_rel,columns=['Data Misura',"E","N","H"],index =l_nomi_pti_misu)
+        lenght=len(l_nomi_pti_misu_c)
+        d_delta_rel={'Nome Punto':l_nomi_pti_misu_c,'Data Misura':[l_dates[i] for j in range(0,lenght)],'E':l_deltaE,'N':l_deltaN,'H':l_deltaH}
+        df_delta_rel_i=pd.DataFrame(d_delta_rel,columns=['Data Misura',"E","N","H"],index =l_nomi_pti_misu_c)
         df_delta_rel=df_delta_rel.append(df_delta_rel_i,ignore_index=False)
     return(df_delta_rel)
 
-def relCoord(fs,l_dates,df_coord_mean,df_delta_rel):
+def RelCoord(fs,l_dates,df_coord_mean,df_delta_rel,df_coord_zero):
     df_coord_rel=pd.DataFrame(columns=["Data Misura","N","E","H"])
-    df_coord_rel=df_coord_mean[df_coord_mean['Data Misura']==l_dates[0]]
-    for i in range(1,len(l_dates)):
-        df_coord_rel_i=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i-1]][['E','N','H']]+fs*df_delta_rel[df_delta_rel['Data Misura']==l_dates[i]][['E','N','H']]
+    #df_coord_rel=df_coord_mean[df_coord_mean['Data Misura']==l_dates[0]]
+    df_coord_rel=df_coord_zero    
+    for i in range(1,len(l_dates)):              
+        l_nomi_pti_misu=df_delta_rel[df_delta_rel["Data Misura"]==l_dates[i]].index.tolist()
+        df_coord_rel_i=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i-1]][['E','N','H']].loc[l_nomi_pti_misu]+fs*df_delta_rel[df_delta_rel['Data Misura']==l_dates[i]][['E','N','H']]
         lenght=len(df_coord_rel_i["E"])
-        df_coord_rel_i.loc[:,'Data Misura'] = pd.Series([l_dates[i] for j in range(0,lenght)], index=df_coord_rel_i.index)
-        df_coord_rel=df_coord_rel.append(df_coord_rel_i,ignore_index=False)   
-    return(df_coord_rel)       
+        df_coord_rel_i.loc[:,'Data Misura'] = pd.Series([l_dates[i] for j in range(0,lenght)], index=l_nomi_pti_misu)
+        df_coord_rel=df_coord_rel.append(df_coord_rel_i,ignore_index=False)
+    
+    return(df_coord_rel)
     
 # definition of list of points for each quote
-def pointsLayers(l_nomi_pti):
+def PointsLayers(l_nomi_pti):
     points_alti=['01','02','03','10','11','12']
     points_inter=['04','05','06']
     points_bassi=['07','08','09']
@@ -167,7 +181,7 @@ def pointsLayers(l_nomi_pti):
     
 
 # creation of displacement vector   
-def arrowPointsCreation(x0,y0,z0,x1,y1,z1, layer_name,drawing):
+def ArrowPointsCreation(x0,y0,z0,x1,y1,z1, layer_name,drawing):
     # vector magnitude calculation
     mod=math.sqrt((x1-x0)**2+(y1-y0)**2+(z1-z0)**2)
     # Calculation of a,d,c coefficient of the plane equation (base of arrow).
@@ -207,11 +221,11 @@ def arrowPointsCreation(x0,y0,z0,x1,y1,z1, layer_name,drawing):
         ez=-ex*a/c
     # Calculation of fx, fy, fz parameters imposing the condition of
     # orthogonality between e=(ex,ey,ez) and f=(fx,fy,fz)
-    def equations(p):
+    def Equations(p):
         fx, fy, fz = p
         return (ex*fx+ey*fy+ez*fz, fx*a+fy*b+fz*c, fx**2+fy**2+fz**2-1)   
     
-    fx,fy,fz = fsolve(equations, (1,1,1))
+    fx,fy,fz = fsolve(Equations, (1,1,1))
     # Alpha angles of the 4 base point of the arrow
     alpha3=0
     alpha4=math.pi/2.
@@ -264,7 +278,7 @@ def arrowPointsCreation(x0,y0,z0,x1,y1,z1, layer_name,drawing):
     drawing.add(lineI)
 
 # creation of labels  
-def datesLabelsCreation(layer_name,i,text_h,drawing):
+def DatesLabelsCreation(layer_name,i,text_h,drawing):
     # insert point of dates labels
     x0=10
     y0=-20
@@ -277,7 +291,7 @@ def datesLabelsCreation(layer_name,i,text_h,drawing):
     drawing.add(text)
   
 # creation of scale bar  
-def scaleBarCreation(fs,text_h,drawing):
+def ScaleBarCreation(fs,text_h,drawing):
     # lenght of 1 cm scalebar
     fs1=fs/100
     drawing.add_layer('scale_bar', color=7)
@@ -311,7 +325,7 @@ def scaleBarCreation(fs,text_h,drawing):
     drawing.add(text)
 
 # creation of points names labels
-def pointsLabels(drawing,text_h,df_coord_zero):
+def PointsLabels(drawing,text_h,df_coord_zero):
     
     for nome_pto in df_coord_zero.index:
         x=df_coord_zero['E'].loc[nome_pto]
@@ -324,7 +338,7 @@ def pointsLabels(drawing,text_h,df_coord_zero):
         drawing.add(text)
     
 # creation of displacements arrows
-def drawDisp(drawing,l_dates,df_coord_zero,df_coord_rel,text_h):
+def DrawDisp(drawing,l_dates,df_coord_zero,df_coord_rel,text_h):
     
     j=1 # layer color index
     
@@ -332,27 +346,36 @@ def drawDisp(drawing,l_dates,df_coord_zero,df_coord_rel,text_h):
         layer_name=l_dates[i].strftime('%d%m%Y')
         drawing.add_layer(layer_name, color=j)
         
-        datesLabelsCreation(layer_name,i,text_h,drawing)
+        DatesLabelsCreation(layer_name,i,text_h,drawing)
 
-        l_nomi_pti_misu=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i]].index.tolist()
+        #l_nomi_pti_misu=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i]].index.tolist()
+        
+        # find for each date the list of measured points names at time t-1
+        l_nomi_pti_misu_p=df_coord_rel[df_coord_rel["Data Misura"]==l_dates[i-1]].index.tolist()
+        # find for each date the list of measured points names at time t
+        l_nomi_pti_misu=df_coord_rel[df_coord_rel["Data Misura"]==l_dates[i]].index.tolist()
         
         for nome_pto in l_nomi_pti_misu:
-
-            x0=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i-1]].loc[nome_pto]['E']
-            y0=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i-1]].loc[nome_pto]['N']
-            z0=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i-1]].loc[nome_pto]['H']
-         
-            x1=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i]].loc[nome_pto]['E']
-            y1=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i]].loc[nome_pto]['N']
-            z1=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i]].loc[nome_pto]['H']
             
-            arrowPointsCreation(x0,y0,z0,x1,y1,z1,layer_name,drawing)
+            if nome_pto in l_nomi_pti_misu_p:
+
+                x0=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i-1]].loc[nome_pto]['E']
+                y0=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i-1]].loc[nome_pto]['N']
+                z0=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i-1]].loc[nome_pto]['H']
+         
+                x1=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i]].loc[nome_pto]['E']
+                y1=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i]].loc[nome_pto]['N']
+                z1=df_coord_rel[df_coord_rel['Data Misura']==l_dates[i]].loc[nome_pto]['H']
+            
+                ArrowPointsCreation(x0,y0,z0,x1,y1,z1,layer_name,drawing)
+                
+                
 
         j=j+1
     drawing.save()
     
 # creation of time-delta graphs
-def graphTD(df_delta, l_nomi_pti_graph):
+def GraphTD(df_delta, l_nomi_pti_graph):
     # inizializzazione variabili
     traces=[]
     l_visible=[False for i in range(0,3*len(l_nomi_pti_graph))]
@@ -419,7 +442,7 @@ def graphTD(df_delta, l_nomi_pti_graph):
     plotly.offline.plot(fig,filename='graph_TD.html')
     
 # creation of list of mutual height distance for each vertical section
-def dist_alt(df_coord_zero, l_allin):
+def DistAlt(df_coord_zero, l_allin):
    
     d_2_1=[]
     
@@ -435,7 +458,7 @@ def dist_alt(df_coord_zero, l_allin):
     return d_cum   
 
 # creation of time-delta graphs of vertical sections
-def graphSection(df_delta, d_cum, l_vert, filename_i):
+def GraphSection(df_delta, d_cum, l_vert, filename_i):
     # inizializzazione variabili
     traces=[]
     l_visible=[False for i in range(0,len(df_delta['Data Misura'].unique()))]
@@ -502,31 +525,31 @@ def graphSection(df_delta, d_cum, l_vert, filename_i):
 #------------------------------------------------------------------------------
 
 def main():
+    
     path="./coordinate"
-
     # height of text labels
     text_h=0.2
     # scale factor for dxf rappresentation
     fs = 100
     l_csv=os.listdir(path)
-    df_coord=readCSV(path,l_csv)
-    l_nomi_pti=nomiPti(df_coord)
-    l_dates=dates(df_coord)
-    s_dates_zero=datesZero(df_coord,l_nomi_pti)
-    df_coord_zero=zeroCoord(df_coord,l_nomi_pti,s_dates_zero)
-    [df_delta,df_coord_mean]=deltaCoord(df_coord,df_coord_zero,l_dates)
-    df_delta_rel=deltaCoordRel(l_dates,df_coord_mean)
-    df_coord_rel=relCoord(fs,l_dates,df_coord_mean,df_delta_rel)
+    df_coord=ReadCSV(path,l_csv)
+    l_nomi_pti=NomiPti(df_coord)
+    l_dates=Dates(df_coord)
+    s_dates_zero=DatesZero(df_coord,l_nomi_pti)
+    df_coord_zero=ZeroCoord(df_coord,l_nomi_pti,s_dates_zero)
+    [df_delta,df_coord_mean]=DeltaCoord(df_coord,df_coord_zero,l_dates)
+    df_delta_rel=DeltaCoordRel(l_dates,df_coord_mean)
+    df_coord_rel=RelCoord(fs,l_dates,df_coord_mean,df_delta_rel,df_coord_zero)
 
     # creation of dxf file of all dispacements
     drawing= dxf.drawing('paratia.dxf')
-    pointsLabels(drawing,text_h,df_coord_zero)
-    scaleBarCreation(fs,text_h,drawing)
-    drawDisp(drawing,l_dates,df_coord_zero,df_coord_rel,text_h)
+    PointsLabels(drawing,text_h,df_coord_zero)
+    ScaleBarCreation(fs,text_h,drawing)
+    DrawDisp(drawing,l_dates,df_coord_zero,df_coord_rel,text_h)
 
     # creation of plotly time-displacements graphs
     l_nomi_pti_graph=['01','02','03','04','05','06','07','08','09','10','11','12']
-    graphTD(df_delta, l_nomi_pti_graph)
+    GraphTD(df_delta, l_nomi_pti_graph)
     
     # creation of plotly normal-displacements graphs
     # definizioni dei punti da rappresentare per ogni verticale
@@ -537,13 +560,13 @@ def main():
     l_vert_3=['09','06','03']
     filename_3='graph_vert_3.html'
     # calcolo mutue distanze fra punti
-    d_cum_1=dist_alt(df_coord_zero, l_vert_1)
-    d_cum_2=dist_alt(df_coord_zero, l_vert_2)
-    d_cum_3=dist_alt(df_coord_zero, l_vert_3)
+    d_cum_1=DistAlt(df_coord_zero, l_vert_1)
+    d_cum_2=DistAlt(df_coord_zero, l_vert_2)
+    d_cum_3=DistAlt(df_coord_zero, l_vert_3)
     # plotly normal-displacements graphs
-    graphSection(df_delta, d_cum_1, l_vert_1, filename_1)
-    graphSection(df_delta, d_cum_2, l_vert_2, filename_2)
-    graphSection(df_delta, d_cum_3, l_vert_3, filename_3)
+    GraphSection(df_delta, d_cum_1, l_vert_1, filename_1)
+    GraphSection(df_delta, d_cum_2, l_vert_2, filename_2)
+    GraphSection(df_delta, d_cum_3, l_vert_3, filename_3)
 
     # write DataFrames to csv
     df_coord.to_csv('coordinate.csv',sep='\t',decimal=',',float_format='%.3f')
